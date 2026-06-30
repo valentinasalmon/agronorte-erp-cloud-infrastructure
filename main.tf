@@ -112,3 +112,64 @@ output "ip_publica" {
   value       = aws_eip.agronorte_eip.public_ip
   description = "IP publica del servidor AgroNorte"
 }
+
+# ─────────────────────────────────────────────
+# 7. S3 BUCKET — LOGS Y BACKUPS
+# ─────────────────────────────────────────────
+resource "aws_s3_bucket" "agronorte_logs" {
+  bucket = "agronorte-logs-backups-2026"
+  tags = {
+    Name = "agronorte-logs"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "agronorte_logs_versioning" {
+  bucket = aws_s3_bucket.agronorte_logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "agronorte_logs_lifecycle" {
+  bucket = aws_s3_bucket.agronorte_logs.id
+  rule {
+    id     = "eliminar-logs-viejos"
+    status = "Enabled"
+    expiration {
+      days = 90
+    }
+  }
+}
+
+# ─────────────────────────────────────────────
+# 8. CLOUDWATCH — MONITOREO DE LA INSTANCIA
+# ─────────────────────────────────────────────
+resource "aws_cloudwatch_metric_alarm" "cpu_alto" {
+  alarm_name          = "agronorte-cpu-alto"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 80
+  alarm_description   = "Alerta cuando CPU supera 80% por 4 minutos"
+  dimensions = {
+    InstanceId = aws_instance.agronorte_server.id
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "memoria_alta" {
+  alarm_name          = "agronorte-disco-alto"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "disk_used_percent"
+  namespace           = "CWAgent"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 85
+  alarm_description   = "Alerta cuando disco supera 85%"
+  dimensions = {
+    InstanceId = aws_instance.agronorte_server.id
+  }
+}
