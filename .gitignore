@@ -14,3 +14,6 @@ terraform-provider-aws*
 .terraform/
 *.exe
 terraform-provider-aws*
+
+agronorte-key.pem
+.terraform.lock.hcl
