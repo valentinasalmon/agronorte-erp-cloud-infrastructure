@@ -1,0 +1,16 @@
+# Credenciales y claves — NUNCA subir
+agronorte-key.pem
+
+# Archivos de Terraform — contienen info sensible
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Ejecutables
+*.exe
+terraform-provider-aws*
+
+.terraform/
+*.exe
+terraform-provider-aws*
