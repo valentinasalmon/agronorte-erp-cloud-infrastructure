@@ -1,12 +1,13 @@
 # ─────────────────────────────────────────────
 # FIREWALL — SECURITY GROUP
 # ─────────────────────────────────────────────
+
 resource "aws_security_group" "agronorte_sg" {
   name        = "agronorte-sg"
   description = "Reglas de acceso para AgroNorte"
   vpc_id      = aws_vpc.agronorte_vpc.id
 
-  # SSH — administracion del servidor
+  # SSH — protocolo para conexion con el servidor
   ingress {
     from_port   = 22
     to_port     = 22
@@ -14,7 +15,7 @@ resource "aws_security_group" "agronorte_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Odoo — ERP
+  # Odoo 
   ingress {
     from_port   = 8069
     to_port     = 8069
@@ -29,16 +30,8 @@ resource "aws_security_group" "agronorte_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
-# Moodle - LMS
-  ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
-  # Salida — todo permitido
+  # Salida 
   egress {
     from_port   = 0
     to_port     = 0

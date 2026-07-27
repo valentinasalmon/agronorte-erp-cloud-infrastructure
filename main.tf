@@ -62,6 +62,34 @@ resource "aws_route_table_association" "agronorte_rta" {
 }
 
 # ─────────────────────────────────────────────
+# 3.5. IAM ROLE PARA CLOUDWATCH AGENT
+# ─────────────────────────────────────────────
+resource "aws_iam_role" "cloudwatch_agent_role" {
+  name = "agronorte-cloudwatch-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "cloudwatch_agent_policy" {
+  role       = aws_iam_role.cloudwatch_agent_role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+resource "aws_iam_instance_profile" "cloudwatch_agent_profile" {
+  name = "agronorte-cloudwatch-profile"
+  role = aws_iam_role.cloudwatch_agent_role.name
+}
+
+# ─────────────────────────────────────────────
 # 4. INSTANCIA EC2
 # ─────────────────────────────────────────────
 data "aws_ami" "ubuntu" {
@@ -79,18 +107,43 @@ resource "aws_instance" "agronorte_server" {
   subnet_id              = aws_subnet.agronorte_subnet.id
   vpc_security_group_ids = [aws_security_group.agronorte_sg.id]
   key_name               = "agronorte-key"
+  iam_instance_profile = aws_iam_instance_profile.cloudwatch_agent_profile.name
 
   root_block_device {
     volume_size = 20
   }
 
   user_data = <<-EOF
-    #!/bin/bash
-    apt-get update -y
-    apt-get install -y docker.io docker-compose
-    systemctl start docker
-    systemctl enable docker
-  EOF
+  #!/bin/bash
+  apt-get update -y
+  apt-get install -y docker.io docker-compose
+
+  systemctl start docker
+  systemctl enable docker
+
+  # Instalar CloudWatch Agent
+  wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+  dpkg -i -E ./amazon-cloudwatch-agent.deb
+
+  # Configuración: qué métricas mandar (en este caso, uso de disco)
+  cat <<'CONFIG' > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+  {
+    "metrics": {
+      "namespace": "CWAgent",
+      "metrics_collected": {
+        "disk": {
+          "measurement": ["disk_used_percent"],
+          "resources": ["/"]
+        }
+      }
+    }
+  }
+  CONFIG
+
+  # Arrancar el agente con esa configuración
+  /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+    -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+EOF
 
   tags = {
     Name = "agronorte-server"
@@ -135,6 +188,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "agronorte_logs_lifecycle" {
   rule {
     id     = "eliminar-logs-viejos"
     status = "Enabled"
+
+ filter {} 
+
     expiration {
       days = 90
     }
@@ -157,8 +213,8 @@ resource "aws_cloudwatch_metric_alarm" "cpu_alto" {
   dimensions = {
     InstanceId = aws_instance.agronorte_server.id
   }
+  alarm_actions = [aws_sns_topic.agronorte_alertas.arn]  
 }
-
 resource "aws_cloudwatch_metric_alarm" "memoria_alta" {
   alarm_name          = "agronorte-disco-alto"
   comparison_operator = "GreaterThanThreshold"
@@ -170,6 +226,22 @@ resource "aws_cloudwatch_metric_alarm" "memoria_alta" {
   threshold           = 85
   alarm_description   = "Alerta cuando disco supera 85%"
   dimensions = {
-    InstanceId = aws_instance.agronorte_server.id
+    device = "nvme0n1p1"
+    fstype = "ext4"
+    host   = "ip-10-0-1-173"
+    path   = "/"
   }
+  alarm_actions = [aws_sns_topic.agronorte_alertas.arn]
+}
+# ─────────────────────────────────────────────
+# 9. SNS — NOTIFICACIONES DE ALARMAS
+# ─────────────────────────────────────────────
+resource "aws_sns_topic" "agronorte_alertas" {
+  name = "agronorte-alertas"
+}
+
+resource "aws_sns_topic_subscription" "agronorte_email_alerta" {
+  topic_arn = aws_sns_topic.agronorte_alertas.arn
+  protocol  = "email"
+  endpoint  = "valentinasalmon11@gmail.com"  
 }

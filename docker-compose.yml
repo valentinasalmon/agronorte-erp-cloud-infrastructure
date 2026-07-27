@@ -2,15 +2,17 @@ version: '3.1'
 services:
   db:
     image: postgres:15
+    restart: unless-stopped
     environment:
       POSTGRES_DB: postgres
       POSTGRES_PASSWORD: agronorte123
       POSTGRES_USER: odoo
     volumes:
-      - odoo-db-data:/var/lib/postgresql/data
+      - odoo-db-data:/var/lib/postgresql/data    
 
   web:
     image: odoo:17.0
+    restart: unless-stopped
     depends_on:
       - db
     ports:
@@ -20,7 +22,8 @@ services:
       USER: odoo
       PASSWORD: agronorte123
     volumes:
-      - odoo-web-data:/var/lib/odoo
+      - odoo-web-data:/var/lib/odoo    
+
 
   n8n:
     image: n8nio/n8n:1.0.0
@@ -32,7 +35,9 @@ services:
       - n8n-data:/home/node/.n8n
     restart: unless-stopped
 
-volumes:
+
+#persistencia de datos (no viven en docker sino EC2)
+volumes: 
   odoo-db-data:
   odoo-web-data:
   n8n-data:
